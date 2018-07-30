@@ -1,0 +1,95 @@
+{
+  "variables": {
+    "iso": null,
+    "checksum": "",
+    "checksum_type": "none",
+    "disk_size": "40960",
+    "password": "",
+    "license": null,
+    "headless": "false",
+    "destroy_vagrant_output": "true",
+    "keep_registered": "true"
+  },
+  "builders": [
+    {
+      "type": "vmware-iso",
+      "keep_registered": "{{ user `keep_registered` }}",
+      "name": "esxi",
+      "vm_name": "esxi",
+      "vmdk_name": "esxi-disk0",
+      "headless": "{{ user `headless`}}",
+      "disk_size": "{{ user `disk_size` }}",
+      "disk_type_id": 0,
+      "guest_os_type": "vmkernel6",
+      "iso_url": "{{user `iso`}}",
+      "iso_checksum": "{{user `checksum`}}",
+      "iso_checksum_type": "{{ user `checksum_type` }}",
+      "ssh_username": "root",
+      "ssh_password": "{{user `password`}}",
+      "ssh_wait_timeout": "15m",
+      "shutdown_command": "esxcli system maintenanceMode set -e true -t 0 ; esxcli system shutdown poweroff -d 10 -r 'Packer Shutdown' ; esxcli system maintenanceMode set -e false -t 0",
+      "http_directory": "config",
+      "boot_wait": "5s",
+      "version": 14,
+      "vmx_data": {
+        "memsize": "4096",
+        "numvcpus": "2",
+        "ethernet0.virtualDev": "vmxnet3",
+        "vhv.enable": "TRUE"
+      },
+      "boot_command": [
+        "<enter><wait>O<wait> ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/esxi.ks.cfg<enter>"
+      ]
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "inline": [
+        "set -x",
+        "vim-cmd vimsvc/license --set={{ user `license` }}",
+        "esxcli system settings advanced set -o /Net/GuestIPHack -i 1",
+        "esxcli system module parameters set -m tcpip4 -p ipv6=0"
+      ]
+    },
+    {
+      "type": "file",
+      "source": "config/allowvnc.xml",
+      "destination": "/etc/vmware/firewall/allowvnc.xml"
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "set -x",
+        "esxcli network firewall refresh",
+        "esxcli network firewall set --enabled false",
+        "/sbin/auto-backup.sh"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "esxcli --debug --formatter=json network ip interface ipv4 address list | sed -e 's/.$//' -e 's/^.//' | tee /tmp/ipaddress.json"
+      ]
+    },
+    {
+      "type": "file",
+      "source": "/tmp/ipaddress.json",
+      "destination": "ipaddress.json",
+      "direction": "download"
+    }
+  ],
+  "post-processors": [
+    {
+      "type": "shell-local",
+      "inline": [
+        "set -x",
+        "PATH=/Applications/VMware\\ Fusion.app/Contents/Library/:${PATH}",
+        "vmrun start output-esxi/esxi.vmx",
+        "IPADDR=$(jq -r .IPv4Address ipaddress.json)",
+        "for i in `seq 1 10`; do echo \"waiting for ssh port on ${IPADDR}\"; nc -z ${IPADDR} 22 && break || sleep 5; done",
+        "sleep 10"
+      ]
+    }
+  ]
+}

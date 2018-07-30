@@ -1,0 +1,4 @@
+packages:
+  lookup:
+    installed:
+      - htop
