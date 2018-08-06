@@ -3,3 +3,6 @@ ipaddress.json
 vars.json
 packer_cache/
 output-*/
+
+build/
+__pycache__/

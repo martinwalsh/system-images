@@ -1,0 +1,114 @@
+vars:
+  name: esxi
+  iso: {{ path('Enter the path to the ESXi ISO', '**/*.iso', recurse=True) }}
+  checksum: {{ prompt('Enter the ISO file checksum', default='') }}
+  checksum_type: {{ choice('Enter the ISO file checksum type', choices=['none', 'md5', 'sha1', 'sha256', 'sha512'], default='none') }}
+  password: {{ prompt('Enter the ssh passwd for the root user', secret=True) }}
+  license: {{ prompt('Enter your esxi license code', secret=True) }}
+files:
+  - path: esxi.json
+    format: json
+    data:
+      variables:
+        iso: {{ id('iso') }}
+        checksum: {{ id('checksum') }}
+        checksum_type: {{ id('checksum_type') }}
+        username: root
+        password: {{ id('password') }}
+        license: {{ id('license') }}
+        disk_size: '40960'
+        headless: 'false'
+        destroy_vagrant_output: "true"
+        keep_registered: "true"
+      builders:
+        - name: {{ id('name') }}
+          type: vmware-iso
+          keep_registered: {{ id('keep_registered') }}
+          vm_name: {{ id('name') }}
+          vmdk_name: disk0
+          headless: {{ id('headless') }}
+          disk_size: {{ id('disk_size') }}
+          disk_type_id: 0
+          guest_os_type: vmkernel6
+          iso_url: {{ id('iso') }}
+          iso_checksum: {{ id('checksum') }}
+          iso_checksum_type: {{ id('checksum_type') }}
+          ssh_username: {{ id('username') }}
+          ssh_password: {{ id('password') }}
+          ssh_wait_timeout: 15m
+          shutdown_command: >
+            esxcli system maintenanceMode set -e true -t 0 ;
+            esxcli system shutdown poweroff -d 10 -r 'Packer Shutdown' ;
+            esxclit system maintenanceMode set -e false -t 0
+          http_directory: kickstart
+          boot_wait: 5s
+          version: 14
+          vmx_data:
+            memsize: '4096'
+            numvcpus: '2'
+            ethernet0.virtualDev: vmxnet3
+            vhv.enable: 'TRUE'
+          boot_command:
+            {% raw %}- '<enter><wait>O<wait> ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ks.cfg<enter>'{% endraw %}
+      provisioners: []
+      post-processors:
+        - type: shell-local
+          inline:
+            - 'set -x'
+            - 'PATH=/Applications/VMware\\ Fusion.app/Contents/Library/:${PATH}'
+            - "vmrun start output-{{ id('name') }}/{{ id('name') }}.vmx"
+            - 'IPADDR=$(jq -r .IPv4Address ipaddress.json)'
+            - 'for i in `seq 1 10`; do echo "waiting for ssh port on ${IPADDR}"; nc -z ${IPADDR} 22 && break || sleep 5; done'
+            - 'sleep 10'
+
+{% raw %}
+  - path: kickstart/ks.cfg
+    format: text
+    content: |
+      #
+      # Sample scripted installation file
+      #
+
+      # Accept EULA
+      vmaccepteula
+      # Set root password
+      rootpw {{ vars['password'] }}
+      #Install on local disk overwriting any existing VMFS datastore
+      install --firstdisk --overwritevmfs
+      # Network configuration
+      network --bootproto=dhcp --device=vmnic0
+      #Reboot after installation completed
+      reboot
+
+      %firstboot --interpreter=busybox
+      vim-cmd vimsvc/license --set="{{ vars['license'] }}"
+      esxcli system settings advances set -o /Net/GuestIPHack -i 1
+      esxcli system module parameters set -m tcpip4 -p ivv6=0
+      #esx/ssh
+      vim-cmd hostsvc/enable_ssh
+      vim-cmd hostsvc/start_ssh
+      esxcli system settings advanced set -o /UserVars/SuppressShellWarning -i 1
+      #esxi/ssh end
+      esxcli network firewall set --enabled false
+      /sbin/auto-backup.sh
+
+  - path: kickstart/allowvnc.xml
+    format: text
+    content: |
+      <ConfigRoot>
+        <service>
+          <id>VNC</id>
+          <rule id='0000'>
+            <direction>inbound</direction>
+            <protocol>tcp</protocol>
+            <porttype>dst</porttype>
+            <port>
+              <begin>5900</begin>
+              <end>5999</end>
+            </port>
+          </rule>
+          <enabled>true</enabled>
+          <required>false</required>
+        </service>
+      </ConfigRoot>
+{% endraw %}

@@ -24,4 +24,8 @@ clean::
 	rm -rf esxi/{output-*,packer_cache} centos7/{output-*,packer_cache}
 	rm -f esxi/ipaddress.json
 
-.PHONY: esxi centos7 clean
+build: | _var_NAME
+	pipenv run bin/generate $(NAME).yml
+	cd build/$(NAME) && packer build $(PACKER_OPTS) $(NAME).json
+
+.PHONY: esxi centos7 clean build
