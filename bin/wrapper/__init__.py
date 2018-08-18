@@ -6,7 +6,7 @@ import yaml
 import jinja2
 
 from .filters import crypt
-from .functions import prompt, choice, path
+from .functions import prompt, choice, path, output
 
 
 def get_j2env(tmpldir):
@@ -30,7 +30,8 @@ def get_context(tmpldir, outdir):
         template = env.get_template('vars.yml')
         rendered = template.render(prompt=prompt,
                                    choice=choice,
-                                   path=path)
+                                   path=path,
+                                   output=output)
         with open(saved, 'w') as f:
             f.write(rendered)
         context = yaml.safe_load(rendered)

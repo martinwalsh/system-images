@@ -46,6 +46,7 @@ files:
             - 'set -x'
             - "vmrun start output-{{ name }}/{{ name }}.vmx"
             - 'IPADDR=$(jq -r .IPv4Address ipaddress.json)'
+            - 'to_yaml host=$IPADDR username={{ username }} password={{ password }} > output.yml'
             - 'for i in `seq 1 10`; do echo "waiting for ssh port on ${IPADDR}"; nc -z ${IPADDR} 22 && break || sleep 5; done'
             - 'sleep 10'
 
@@ -68,13 +69,15 @@ files:
 
       %firstboot --interpreter=busybox
       vim-cmd vimsvc/license --set="{{ license }}"
-      esxcli system settings advances set -o /Net/GuestIPHack -i 1
-      esxcli system module parameters set -m tcpip4 -p ivv6=0
+
       #esx/ssh
       vim-cmd hostsvc/enable_ssh
       vim-cmd hostsvc/start_ssh
       esxcli system settings advanced set -o /UserVars/SuppressShellWarning -i 1
       #esxi/ssh end
+
+      esxcli system settings advanced set -o /Net/GuestIPHack -i 1
+      esxcli system module parameters set -m tcpip4 -p ivv6=0
       esxcli network firewall set --enabled false
       /sbin/auto-backup.sh
 

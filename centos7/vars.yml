@@ -1,0 +1,6 @@
+name: centos7
+ssh_username: root
+ssh_password: {{ prompt('Enter the ssh password for root', secret=True) }}
+esx_username: {{ output('esxi', 'username') }}
+esx_password: {{ output('esxi', 'password') }}
+esx_host: {{ output('esxi', 'host') }}

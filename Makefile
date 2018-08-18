@@ -5,27 +5,24 @@ include .makefiles/ludicrous.mk
 # To prevent the password dialog when Fusion launches ESXi:
 # sudo touch /Library/Preferences/VMware\ Fusion/promiscAuthorized
 
-esxi/output-esxi:
-	$(call log,building $@)
-	cd esxi && packer build $(PACKER_OPTS)  -var-file=vars.json esxi.json
-
-#> build an esxi vm on vmware fusion
-esxi: | esxi/output-esxi
-
-#> build a centos7 image on esxi
-centos7: | esxi _program_jq
-	$(call log,building $@)
-	cd $@ && packer build $(PACKER_OPTS) -var "esx_host=$$(jq -r .IPv4Address ../esxi/ipaddress.json)" -var-file=vars.json $@.json
+promisc:
+	if [ ! -f /Applications/VMware\ Fusion.app/Contents/Library/promiscAuthorized ]; then \
+		sudo touch /Applications/VMware\ Fusion.app/Contents/Library/promiscAuthorized ; \
+	fi
 
 clean:: export PATH := /Applications/VMware\ Fusion.app/Contents/Library/:$(PATH)
 clean::
 	$(call log,removing build artifacts)
-	vmrun stop build/esxi/output-esxi/esxi.vmx && sleep 10 || true
+	for VM in `find . -name "*.vmx"`; do \
+		vmrun stop $$VM && sleep 10 || true ; \
+	done
 	rm -rf build/
 
-build: export PATH := /Applications/VMWare\\ Fusion.app/Contents/Library:$(PATH)
-build: | _var_NAME
-	pipenv run bin/generate $(NAME)
-	cd build/$(NAME) && packer build $(PACKER_OPTS) $(NAME).json
+build: export PATH := /Applications/VMWare\\ Fusion.app/Contents/Library:$(CURDIR)/bin:$(PATH)
+build: | promisc
+	for name in $(if $(NAME),$(NAME),esxi centos7); do \
+		pipenv run bin/generate $$name; \
+		(cd build/$${name} && packer build $(PACKER_OPTS) $${name}.json) ; \
+	done
 
-.PHONY: esxi centos7 clean build
+.PHONY: build clean promisc

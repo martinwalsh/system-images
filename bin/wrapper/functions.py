@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import glob
+import yaml
 import getpass
 import textwrap
 
@@ -40,3 +41,7 @@ def path(message, pattern='*.*', default='', recurse=False, always=False):
         answer = choice(message, glob.glob(pattern, recursive=recurse), default)
     return os.path.abspath(answer)
 
+
+def output(name, key, basedir='build'):
+    with open(f'{basedir}/{name}/output.yml') as f:
+        return yaml.load(f)[key]
