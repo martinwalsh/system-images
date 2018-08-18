@@ -6,7 +6,8 @@ include .makefiles/ludicrous.mk
 # sudo touch /Library/Preferences/VMware\ Fusion/promiscAuthorized
 
 promisc:
-	if [ ! -f /Applications/VMware\ Fusion.app/Contents/Library/promiscAuthorized ]; then \
+	@if [ ! -f /Applications/VMware\ Fusion.app/Contents/Library/promiscAuthorized ]; then \
+		$(call _log,permanently authorize promiscuous mode in VMware Fusion); \
 		sudo touch /Applications/VMware\ Fusion.app/Contents/Library/promiscAuthorized ; \
 	fi
 

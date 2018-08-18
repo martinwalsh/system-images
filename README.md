@@ -13,9 +13,19 @@ environment for creating system images.
 
 ## Steps
 
-1. Create a `vars.json` in each build directory (`esxi/`, `centos7`, etc) from the corresponding
-   `vars.json.example` provided.
-2. Run `make centos7`
+1. Download the [ESXi iso](https://www.vmware.com/go/get-free-esxi) to any location under the root of this project.
+2. Make note of the checksum and license code from the download page.
+2. Run `make build` and respond to prompts, as necessary.
+
+## Iterative Builds
+
+Pass a NAME parameter to `make build`. For example ...
+
+```
+make build NAME=centos7
+```
+
+... this will skip the esxi build, assuming it has already completed.
 
 ## Cleanup
 
