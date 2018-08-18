@@ -3,144 +3,99 @@ import os
 import re
 import json
 import yaml
-import glob
 import jinja2
-import string
-import secrets
-import getpass
-import textwrap
 
-from passlib.hash import sha512_crypt
+from .filters import crypt
+from .functions import prompt, choice, path
 
 
-@jinja2.contextfunction
-def anchor(ctx, value):
-    if value not in ctx.parent['refs']:
-        ctx.parent['refs'].append(value)
-    return f'*{value}'
-
-
-def prompt(message, default='', secret=False):
-    extra = '>>> '
-    if default:
-        extra = f'[{default}] ' + extra
-    message = f'{message} {extra}'
-
-    if secret:
-        _ask = getpass.getpass
-    else:
-        _ask = input
-
-    answer = _ask(message).strip()
-    return answer if answer else default
-
-
-def choice(message, choices, default=''):
-    items = '\n'.join([f'{i}: {item}' for i, item in enumerate(choices, 1)])
-    try:
-        answer = int(prompt(f"{message}\n{textwrap.indent(items, '  ')}\n", default=default))
-        return choices[int(answer) - 1]
-    except (ValueError, IndexError):
-        print('ERROR: invalid selection!')
-        return choice(message, choices, default)
-
-
-def path(message, pattern='*.*', default='', recurse=False, always=False):
-    matches = glob.glob(pattern, recursive=recurse)
-    if not matches:
-        raise ValueError(f'No files matching pattern {pattern}')
-    if len(matches) == 1 and not always:
-        answer = matches[0]
-    else:
-        answer = choice(message, glob.glob(pattern, recursive=recurse), default)
-    return os.path.abspath(answer)
-
-
-random = secrets.SystemRandom()
-
-
-def crypt(password, salt=None, rounds=5000):
-    if salt is None:
-        salt = ''.join(random.choices(string.digits + string.ascii_letters, k=16))
-    return sha512_crypt.hash(password, salt=salt, rounds=rounds)
-
-
-FUNCTIONS = {
-    'id': anchor,
-    'prompt': prompt,
-    'choice': choice,
-    'path': path,
-}
-
-
-def render_yaml(path):
-    env = jinja2.Environment(
-            loader = jinja2.FileSystemLoader(os.path.dirname(path)),
-            keep_trailing_newline = True,
-            undefined = jinja2.StrictUndefined,
+def get_j2env(tmpldir):
+    j2env = jinja2.Environment(
+        loader = jinja2.FileSystemLoader(tmpldir),
+        keep_trailing_newline = True,
+        undefined = jinja2.StrictUndefined,
     )
-    env.globals['env'] = os.environ.get
-    env.globals['refs'] = []
-    env.filters['crypt'] = crypt
-
-    template = env.get_template(os.path.basename(path))
-    output = template.render(**FUNCTIONS)
-
-    for ref in env.globals['refs']:
-        output = re.sub(r'^( *)({0}):(?! [&\*]{0})(.*)?$'.format(ref),
-                        r'\1\2: &\2\3', output, count=1, flags=re.M)
-
-    return yaml.safe_load(output)
+    j2env.globals['env'] = os.environ.get
+    j2env.filters['crypt'] = crypt
+    return j2env
 
 
-class TemplateFile(object):
-    def __init__(self, config):
-        self.config = config
-        self.path = self.config['file']['path']
+def get_context(tmpldir, outdir):
+    saved = os.path.join(outdir, 'vars.yml')
+    if os.path.exists(saved):
+        with open(saved) as f:
+            context = yaml.safe_load(f)
+    else:
+        env = get_j2env(tmpldir)
+        template = env.get_template('vars.yml')
+        rendered = template.render(prompt=prompt,
+                                   choice=choice,
+                                   path=path)
+        with open(saved, 'w') as f:
+            f.write(rendered)
+        context = yaml.safe_load(rendered)
+    return context
+
+
+def get_files(tmpldir, context):
+    env = get_j2env(tmpldir)
+    template = env.get_template('files.yml')
+    rendered = yaml.safe_load(template.render(**context))
+    return rendered['files']
+
+
+class File(object):
+    def __init__(self, fobj):
+        self.path = fobj['path']
+        self.content = fobj['content']
+
+    def _write(self, fd):
+        return NotImplemented
 
     def write(self):
         dirname = os.path.dirname(self.path)
         if dirname:
-            os.makedirs(dirname, exist_ok=True)
-        with open(self.path, 'w') as fd:
-            self._write(fd)
-
-    def _write(self):
-        return NotImplemented
+            self.mkdir_p(dirname)
+        with open(self.path, 'w') as f:
+            self._write(f)
 
     @classmethod
-    def pick(cls, config):
+    def mkdir_p(cls, path):
+        os.makedirs(path, exist_ok=True)
+
+    @classmethod
+    def pick(cls, fobj):
+        subcls = f'{fobj.get("format", "text").capitalize()}{cls.__name__}'
         for k in cls.__subclasses__():
-            if k.__name__.startswith(config['file']['format'].capitalize()):
-                return k(config)
+            if k.__name__ == subcls:
+                return k(fobj)
         else:
-            raise RuntimeError('Cannot find a TemplateFile class matching the given format.')
+            raise RuntimeError(
+                f'{cls.__name__} subclass named {subcls} is not defined'
+            )
 
 
-class JsonTemplateFile(TemplateFile):
+class TextFile(File):
     def _write(self, fd):
-        json.dump(self.config['file']['data'], fd, indent=2)
+        fd.write(self.content)
 
 
-# FIXME: all of the original yaml config should be within jinja2 raw blocks
-#        except for user input, and then handling of those variables should be separated here.
-class TextTemplateFile(TemplateFile):
+class JsonFile(File):
     def _write(self, fd):
-        template = jinja2.Template(self.config['file']['content'])
-        fd.write(template.render(vars=self.config['vars']))
+        json.dump(self.content, fd, indent=2)
 
 
-def create_build_dir(config):
-    name = config['vars']['name']
+def mkbuild(path, build):
+    path = os.path.abspath(path)
+    build = os.path.abspath(build)
 
     pwd = os.getcwd()
     try:
-        os.makedirs(f'build/{name}', exist_ok=True)
-        os.chdir(f'build/{name}')
+        File.mkdir_p(build)
+        context = get_context(path, build)
 
-        for fobj in config['files']:
-            usercfg = {'vars': config['vars']}
-            usercfg.update({'file': fobj})
-            TemplateFile.pick(usercfg).write()
+        os.chdir(build)
+        for fobj in get_files(path, context):
+            File.pick(fobj).write()
     finally:
         os.chdir(pwd)

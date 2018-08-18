@@ -1,0 +1,11 @@
+name: esxi
+iso: {{ path('Enter the path to the ESXi ISO', '**/*.iso', recurse=True) }}
+checksum: {{ prompt('Enter the ISO file checksum', default='') }}
+checksum_type: {{ choice('Enter the ISO file checksum type', choices=['none', 'md5', 'sha1', 'sha256', 'sha512'], default='none') }}
+username: root
+password: {{ prompt('Enter the ssh passwd for the root user', secret=True) }}
+license: {{ prompt('Enter your esxi license code', secret=True) }}
+disk_size: 40960
+headless: no
+keep_registered: yes
+

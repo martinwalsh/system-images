@@ -20,13 +20,12 @@ centos7: | esxi _program_jq
 clean:: export PATH := /Applications/VMware\ Fusion.app/Contents/Library/:$(PATH)
 clean::
 	$(call log,removing build artifacts)
-	vmrun stop esxi/output-esxi/esxi.vmx && sleep 10 || true
-	rm -rf esxi/{output-*,packer_cache} centos7/{output-*,packer_cache}
-	rm -f esxi/ipaddress.json
+	vmrun stop build/esxi/output-esxi/esxi.vmx && sleep 10 || true
+	rm -rf build/
 
 build: export PATH := /Applications/VMWare\\ Fusion.app/Contents/Library:$(PATH)
 build: | _var_NAME
-	pipenv run bin/generate $(NAME).yml
+	pipenv run bin/generate $(NAME)
 	cd build/$(NAME) && packer build $(PACKER_OPTS) $(NAME).json
 
 .PHONY: esxi centos7 clean build

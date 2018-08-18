@@ -1,40 +1,22 @@
-vars:
-  name: esxi
-  iso: {{ path('Enter the path to the ESXi ISO', '**/*.iso', recurse=True) }}
-  checksum: {{ prompt('Enter the ISO file checksum', default='') }}
-  checksum_type: {{ choice('Enter the ISO file checksum type', choices=['none', 'md5', 'sha1', 'sha256', 'sha512'], default='none') }}
-  password: {{ prompt('Enter the ssh passwd for the root user', secret=True) }}
-  license: {{ prompt('Enter your esxi license code', secret=True) }}
 files:
   - path: esxi.json
     format: json
-    data:
-      variables:
-        iso: {{ id('iso') }}
-        checksum: {{ id('checksum') }}
-        checksum_type: {{ id('checksum_type') }}
-        username: root
-        password: {{ id('password') }}
-        license: {{ id('license') }}
-        disk_size: '40960'
-        headless: 'false'
-        destroy_vagrant_output: "true"
-        keep_registered: "true"
+    content:
       builders:
-        - name: {{ id('name') }}
+        - name: {{ name }}
           type: vmware-iso
-          keep_registered: {{ id('keep_registered') }}
-          vm_name: {{ id('name') }}
+          keep_registered: {{ keep_registered }}
+          vm_name: {{ name }}
           vmdk_name: disk0
-          headless: {{ id('headless') }}
-          disk_size: {{ id('disk_size') }}
+          headless: {{ headless }}
+          disk_size: {{ disk_size }}
           disk_type_id: 0
           guest_os_type: vmkernel6
-          iso_url: {{ id('iso') }}
-          iso_checksum: {{ id('checksum') }}
-          iso_checksum_type: {{ id('checksum_type') }}
-          ssh_username: {{ id('username') }}
-          ssh_password: {{ id('password') }}
+          iso_url: {{ iso }}
+          iso_checksum: {{ checksum }}
+          iso_checksum_type: {{ checksum_type }}
+          ssh_username: {{ username }}
+          ssh_password: {{ password }}
           ssh_wait_timeout: 15m
           shutdown_command: >
             esxcli system maintenanceMode set -e true -t 0 ;
@@ -62,14 +44,12 @@ files:
         - type: shell-local
           inline:
             - 'set -x'
-            - "vmrun start output-{{ id('name') }}/{{ id('name') }}.vmx"
+            - "vmrun start output-{{ name }}/{{ name }}.vmx"
             - 'IPADDR=$(jq -r .IPv4Address ipaddress.json)'
             - 'for i in `seq 1 10`; do echo "waiting for ssh port on ${IPADDR}"; nc -z ${IPADDR} 22 && break || sleep 5; done'
             - 'sleep 10'
 
-{% raw %}
   - path: kickstart/ks.cfg
-    format: text
     content: |
       #
       # Sample scripted installation file
@@ -78,7 +58,7 @@ files:
       # Accept EULA
       vmaccepteula
       # Set root password
-      rootpw {{ vars['password'] }}
+      rootpw {{ password }}
       #Install on local disk overwriting any existing VMFS datastore
       install --firstdisk --overwritevmfs
       # Network configuration
@@ -87,7 +67,7 @@ files:
       reboot
 
       %firstboot --interpreter=busybox
-      vim-cmd vimsvc/license --set="{{ vars['license'] }}"
+      vim-cmd vimsvc/license --set="{{ license }}"
       esxcli system settings advances set -o /Net/GuestIPHack -i 1
       esxcli system module parameters set -m tcpip4 -p ivv6=0
       #esx/ssh
@@ -99,7 +79,6 @@ files:
       /sbin/auto-backup.sh
 
   - path: kickstart/allowvnc.xml
-    format: text
     content: |
       <ConfigRoot>
         <service>
@@ -117,4 +96,3 @@ files:
           <required>false</required>
         </service>
       </ConfigRoot>
-{% endraw %}

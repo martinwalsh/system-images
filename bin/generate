@@ -12,8 +12,8 @@ def usage():
 
 if __name__ == '__main__':
     try:
-      path = sys.argv[1]
+      name = sys.argv[1]
     except IndexError:
         usage()
     else:
-        wrapper.create_build_dir(wrapper.render_yaml(path))
+        wrapper.mkbuild(name, f'build/{name}')
