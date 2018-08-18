@@ -50,12 +50,18 @@ files:
             vhv.enable: 'TRUE'
           boot_command:
             {% raw %}- '<enter><wait>O<wait> ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ks.cfg<enter>'{% endraw %}
-      provisioners: []
+      provisioners:
+        - type: shell
+          inline:
+            - "esxcli --debug --formatter=json network ip interface ipv4 address list | sed -e 's/.$//' -e 's/^.//' | tee /tmp/ipaddress.json"
+        - type: file
+          source: /tmp/ipaddress.json
+          destination: ipaddress.json
+          direction: download
       post-processors:
         - type: shell-local
           inline:
             - 'set -x'
-            - 'PATH=/Applications/VMware\\ Fusion.app/Contents/Library/:${PATH}'
             - "vmrun start output-{{ id('name') }}/{{ id('name') }}.vmx"
             - 'IPADDR=$(jq -r .IPv4Address ipaddress.json)'
             - 'for i in `seq 1 10`; do echo "waiting for ssh port on ${IPADDR}"; nc -z ${IPADDR} 22 && break || sleep 5; done'
