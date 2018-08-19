@@ -5,6 +5,8 @@ include .makefiles/ludicrous.mk
 # To prevent the password dialog when Fusion launches ESXi:
 # sudo touch /Library/Preferences/VMware\ Fusion/promiscAuthorized
 
+ALL := esxi centos7
+
 promisc:
 	@if [ ! -f /Applications/VMware\ Fusion.app/Contents/Library/promiscAuthorized ]; then \
 		$(call _log,permanently authorize promiscuous mode in VMware Fusion); \
@@ -22,7 +24,7 @@ clean::
 #> build all images
 build: export PATH := /Applications/VMWare\\ Fusion.app/Contents/Library:$(CURDIR)/bin:$(PATH)
 build: | promisc
-	for name in $(if $(NAME),$(NAME),esxi centos7); do \
+	for name in $(if $(NAME),$(NAME),$(ALL)); do \
 		pipenv run bin/generate $$name; \
 		(cd build/$${name} && packer build $(PACKER_OPTS) $${name}.json) ; \
 	done

@@ -7,7 +7,7 @@ files:
           type: vmware-iso
           keep_registered: {{ keep_registered }}
           vm_name: {{ name }}
-          vmdk_name: disk0
+          vmdk_name: {{ name }}-disk0
           headless: {{ headless }}
           disk_size: {{ disk_size }}
           disk_type_id: 0
@@ -33,12 +33,22 @@ files:
           boot_command:
             {% raw %}- '<enter><wait>O<wait> ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ks.cfg<enter>'{% endraw %}
       provisioners:
+        - type: file
+          source: kickstart/allowvnc.xml
+          destination: /etc/vmware/firewall/allowvnc.xml
         - type: shell
           inline:
             - "esxcli --debug --formatter=json network ip interface ipv4 address list | sed -e 's/.$//' -e 's/^.//' | tee /tmp/ipaddress.json"
+            - 'mkdir -p /.ssh; chmod 0700 /.ssh'
+            - '/usr/lib/vmware/openssh/bin/ssh-keygen -t rsa -b 4096 -N "" -f /.ssh/id_rsa'
+            - 'cat /.ssh/id_rsa.pub >> /etc/ssh/keys-root/authorized_keys'
         - type: file
           source: /tmp/ipaddress.json
           destination: ipaddress.json
+          direction: download
+        - type: file
+          source: /.ssh/id_rsa
+          destination: {{ name }}_id_rsa
           direction: download
       post-processors:
         - type: shell-local
@@ -48,7 +58,10 @@ files:
             - 'IPADDR=$(jq -r .IPv4Address ipaddress.json)'
             - 'to_yaml host=$IPADDR username={{ username }} password={{ password }} > output.yml'
             - 'for i in `seq 1 10`; do echo "waiting for ssh port on ${IPADDR}"; nc -z ${IPADDR} 22 && break || sleep 5; done'
+            - 'chmod 0600 {{ name }}_id_rsa'
             - 'sleep 10'
+            # FIXME: The following may not be necessary if we reboot in the kickstart.
+            - 'ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectionAttempts=10 -o ConnectTimeout=10 -i {{ name }}_id_rsa root@${IPADDR} esxcli system maintenanceMode set -e false'
 
   - path: kickstart/ks.cfg
     content: |
@@ -68,17 +81,18 @@ files:
       reboot
 
       %firstboot --interpreter=busybox
-      vim-cmd vimsvc/license --set="{{ license }}"
-
       #esx/ssh
       vim-cmd hostsvc/enable_ssh
       vim-cmd hostsvc/start_ssh
       esxcli system settings advanced set -o /UserVars/SuppressShellWarning -i 1
       #esxi/ssh end
 
+      vim-cmd vimsvc/license --set={{ license }}
       esxcli system settings advanced set -o /Net/GuestIPHack -i 1
       esxcli system module parameters set -m tcpip4 -p ipv6=0
-      esxcli network firewall set --enabled false
+
+      esxcli network firewall refresh
+      esxcli network firewall set --enabled false   # FIXME: explore allowvnc.xml and/or enabling gdbserver
       /sbin/auto-backup.sh
 
   - path: kickstart/allowvnc.xml
