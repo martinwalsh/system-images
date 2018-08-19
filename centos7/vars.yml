@@ -4,3 +4,4 @@ ssh_password: {{ prompt('Enter the ssh password for root', secret=True) }}
 esx_username: {{ output('esxi', 'username') }}
 esx_password: {{ output('esxi', 'password') }}
 esx_host: {{ output('esxi', 'host') }}
+iso: {{ path('Enter the path to the CentOS ISO', '**/CentOS*.iso', recurse=True) }}

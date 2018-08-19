@@ -11,7 +11,7 @@ files:
           headless: {{ headless }}
           disk_size: {{ disk_size }}
           disk_type_id: 0
-          guest_os_type: vmkernel6
+          guest_os_type: vmkernel65
           iso_url: {{ iso }}
           iso_checksum: {{ checksum }}
           iso_checksum_type: {{ checksum_type }}
@@ -77,7 +77,7 @@ files:
       #esxi/ssh end
 
       esxcli system settings advanced set -o /Net/GuestIPHack -i 1
-      esxcli system module parameters set -m tcpip4 -p ivv6=0
+      esxcli system module parameters set -m tcpip4 -p ipv6=0
       esxcli network firewall set --enabled false
       /sbin/auto-backup.sh
 

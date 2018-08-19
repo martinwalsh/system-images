@@ -19,6 +19,7 @@ clean::
 	done
 	rm -rf build/
 
+#> build all images
 build: export PATH := /Applications/VMWare\\ Fusion.app/Contents/Library:$(CURDIR)/bin:$(PATH)
 build: | promisc
 	for name in $(if $(NAME),$(NAME),esxi centos7); do \
