@@ -29,4 +29,7 @@ build: | promisc
 		(cd build/$${name} && packer build $(PACKER_OPTS) $${name}.json) ; \
 	done
 
+master:
+	pipenv run salt-cloud -c salt/etc/salt -m salt/etc/salt/cloud.maps.d/local.conf
+
 .PHONY: build clean promisc

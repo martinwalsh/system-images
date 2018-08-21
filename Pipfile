@@ -4,13 +4,18 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+salt = "==2018.3.2"
+salt-cloud = "==0.8.11"
 passlib = "*"
 pyyaml = "*"
 "jinja2" = "*"
+singledispatch = "*"
+backports_abc = "*"
+pyVmomi = "*"
 
 [dev-packages]
 pytest = "*"
 ipython = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "2.7"
